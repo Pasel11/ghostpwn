@@ -40,6 +40,8 @@ from modules.payload_generator import (
     generate_reverse_shell, generate_web_shell,
     generate_all_reverse_shells,
 )
+from modules.auto_pentest import AutoPentest
+from modules.session_cleanup import SessionCleanup
 
 
 # ----------------------------- Banner -----------------------------
@@ -381,6 +383,12 @@ def main():
     )
     parser.add_argument("url", nargs="?", help="Target URL")
     parser.add_argument("--interactive", "-i", action="store_true", help="Interactive TUI menu")
+    parser.add_argument("--auto", action="store_true",
+                       help="Full automatic pentest (scan + exploit)")
+    parser.add_argument("--stealth", choices=["low", "medium", "high"],
+                       help="Stealth mode (low-noise scanning)")
+    parser.add_argument("--cleanup", action="store_true",
+                       help="Clean local temp files (preserves audit logs)")
     parser.add_argument("--depth", default="medium", choices=["fast", "medium", "deep"],
                        help="Scan depth (default: medium)")
     parser.add_argument("--threads", type=int, default=10, help="Number of threads (default: 10)")
@@ -410,6 +418,13 @@ def main():
     parser.add_argument("--all-reverse", action="store_true", help="Generate all reverse shells")
 
     args = parser.parse_args()
+
+    # Cleanup mode
+    if args.cleanup:
+        cleanup = SessionCleanup(".")
+        result = cleanup.full_local_cleanup(keep_audit=True)
+        cleanup.print_summary()
+        return
 
     # Payload generation modes
     if args.list_reverse:
@@ -445,8 +460,49 @@ def main():
         return
 
     # Interactive mode
-    if args.interactive or not args.url:
+    if args.interactive or (not args.url and not args.auto):
         interactive_menu()
+        return
+
+    # Auto mode (full automatic pentest)
+    if args.auto:
+        if not args.url:
+            log_error("--auto يتطلب URL")
+            return
+        url = args.url
+        if not url.startswith("http"):
+            url = "http://" + url
+
+        options = {
+            "depth": args.depth,
+            "threads": args.threads,
+            "timeout": args.timeout,
+            "proxy": args.proxy,
+            "cookie": args.cookie,
+            "user_agent": args.user_agent,
+            "delay": args.delay,
+            "output": args.output,
+            "auto_exploit": True,  # تفعيل الاستغلال الأوتوماتيكي
+            "stealth": args.stealth,
+        }
+
+        # تطبيق stealth mode
+        if args.stealth:
+            log_info(f"تفعيل وضع التخفي: {args.stealth}")
+            if args.stealth == "low":
+                options["delay"] = max(options["delay"], 0.5)
+            elif args.stealth == "medium":
+                options["delay"] = max(options["delay"], 2.0)
+            elif args.stealth == "high":
+                options["delay"] = max(options["delay"], 5.0)
+
+        auto = AutoPentest(url, options)
+        result = auto.run()
+
+        print(f"\n{Colors.GREEN}[✓] اكتمل الفحص الأوتوماتيكي{Colors.NC}")
+        print(f"  المدة: {result['duration']}s")
+        print(f"  الثغرات: {result['vulns_count']}")
+        print(f"  الاستغلال الناجح: {result['exploits_count']}")
         return
 
     # Normal scan

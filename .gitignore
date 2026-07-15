@@ -1,0 +1,27 @@
+# Reports directory
+reports/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Generated shells (لا ترفعها!)
+shell.php
+shell.asp
+shell.aspx
+shell.jsp
+shells_*.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

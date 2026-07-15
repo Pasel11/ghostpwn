@@ -389,6 +389,17 @@ def main():
                        help="Stealth mode (low-noise scanning)")
     parser.add_argument("--cleanup", action="store_true",
                        help="Clean local temp files (preserves audit logs)")
+    parser.add_argument("--brute", action="store_true",
+                       help="Enable brute force attacks (SSH/FTP/HTTP)")
+    parser.add_argument("--dump-db", action="store_true",
+                       help="Auto dump database if SQLi found")
+    parser.add_argument("--deploy-shell", action="store_true",
+                       help="Auto deploy reverse shell if RCE found")
+    parser.add_argument("--listener-ip", help="Listener IP for reverse shell")
+    parser.add_argument("--listener-port", type=int, default=4444,
+                       help="Listener port for reverse shell (default: 4444)")
+    parser.add_argument("--full", action="store_true",
+                       help="Full auto mode (exploit + brute + dump + shell)")
     parser.add_argument("--depth", default="medium", choices=["fast", "medium", "deep"],
                        help="Scan depth (default: medium)")
     parser.add_argument("--threads", type=int, default=10, help="Number of threads (default: 10)")
@@ -465,13 +476,22 @@ def main():
         return
 
     # Auto mode (full automatic pentest)
-    if args.auto:
+    if args.auto or args.full:
         if not args.url:
-            log_error("--auto يتطلب URL")
+            log_error("--auto/--full يتطلب URL")
             return
         url = args.url
         if not url.startswith("http"):
             url = "http://" + url
+
+        # لو --full، فعّل كل الحاجات
+        if args.full:
+            args.auto = True
+            args.brute = True
+            args.dump_db = True
+            args.deploy_shell = True
+            if not args.listener_ip:
+                log_warn("--full يتطلب --listener-ip لـ reverse shell")
 
         options = {
             "depth": args.depth,
@@ -482,7 +502,12 @@ def main():
             "user_agent": args.user_agent,
             "delay": args.delay,
             "output": args.output,
-            "auto_exploit": True,  # تفعيل الاستغلال الأوتوماتيكي
+            "auto_exploit": args.auto,
+            "auto_brute": args.brute,
+            "dump_db": args.dump_db,
+            "deploy_shell": args.deploy_shell,
+            "listener_ip": args.listener_ip,
+            "listener_port": args.listener_port,
             "stealth": args.stealth,
         }
 

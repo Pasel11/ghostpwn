@@ -21,7 +21,7 @@ import urllib.request
 import urllib.parse
 from typing import Dict, List, Optional, Tuple
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 # ============================ WordPress Plugin Vulnerabilities ============================

@@ -15,7 +15,7 @@ import urllib.parse
 import base64
 from typing import Dict, List, Optional, Tuple
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.http_client import HttpClient
 from modules.payload_generator import (

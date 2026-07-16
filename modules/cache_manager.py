@@ -21,7 +21,7 @@ import json
 from typing import Dict, Optional, Any, List, Callable
 from collections import OrderedDict
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.arabic_display import SmartLogger, Colors
 

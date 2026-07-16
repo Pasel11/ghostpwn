@@ -13,7 +13,7 @@ import json
 from typing import Dict, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.http_client import HttpClient
 from modules.arabic_display import SmartLogger, Colors, fix_display

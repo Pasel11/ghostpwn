@@ -19,7 +19,7 @@ import random
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.http_client import HttpClient
 from modules.smart_waf import SmartWAFDetector, SmartRequestWrapper

@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Callable, Set, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.arabic_display import SmartLogger, Colors, fix_display
 

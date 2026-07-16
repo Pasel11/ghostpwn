@@ -186,6 +186,12 @@ class VulnDetector:
 
                 resp = self.client.get(test_url)
 
+                # فحص Content-Type - لو JSON، مش XSS قابل للاستغلال
+                content_type = resp["headers"].get("Content-Type", "").lower()
+                if "application/json" in content_type or "application/xml" in content_type:
+                    # JSON/XML reflection مش exploitable XSS
+                    continue
+
                 # فحص لو الـ payload ظهر في الـ response كما هو
                 if test_payload in resp["body"]:
                     self.add_vuln(
@@ -354,11 +360,22 @@ class VulnDetector:
     ]
 
     def detect_ssti(self, url: str) -> List[Dict]:
-        """كشف SSTI"""
+        """كشف SSTI - مع تجنب false positives"""
         parsed = urllib.parse.urlparse(url)
         params = urllib.parse.parse_qs(parsed.query) if parsed.query else {"q": [""]}
 
         for param_name in list(params.keys())[:3]:
+            # أولاً نرسل قيمة عادية كـ baseline
+            baseline_params = params.copy()
+            baseline_params[param_name] = ["ghostpwn_baseline_test"]
+            baseline_query = urllib.parse.urlencode(baseline_params, doseq=True)
+            baseline_url = urllib.parse.urlunparse((
+                parsed.scheme, parsed.netloc, parsed.path,
+                parsed.params, baseline_query, parsed.fragment
+            ))
+            baseline_resp = self.client.get(baseline_url)
+            baseline_body = baseline_resp["body"]
+
             for payload, expected in self.SSTI_PAYLOADS:
                 test_params = params.copy()
                 test_params[param_name] = [payload]
@@ -369,14 +386,28 @@ class VulnDetector:
                 ))
 
                 resp = self.client.get(test_url)
+                body = resp["body"]
 
-                if expected in resp["body"]:
-                    self.add_vuln(
-                        "ssti", "critical", test_url,
-                        f"SSTI: {payload} evaluated to {expected}", "ssti",
-                        param=param_name, payload=payload
-                    )
-                    return self.vulns_found
+                # شرط 1: الناتج المتوقع موجود في الـ response
+                if expected not in body:
+                    continue
+
+                # شرط 2: الـ payload نفسه مش موجود كما هو (لو اتنفذ، يتشال)
+                # لكن بعض المواقع بترجع الـ payload + الناتج
+                # فنشوف لو الناتج موجود في مكان مختلف عن الـ payload
+
+                # شرط 3: الناتج مش موجود في الـ baseline (تجنب false positive)
+                if expected in baseline_body:
+                    continue
+
+                # شرط 4: نتأكد إن الناتج جديد (مش موجود في baseline)
+                # بمعنى: لو بعتنا {{7*7}} وطلع "49"، و"49" مش في baseline = SSTI حقيقي
+                self.add_vuln(
+                    "ssti", "critical", test_url,
+                    f"SSTI: {payload} evaluated to {expected}", "ssti",
+                    param=param_name, payload=payload
+                )
+                return self.vulns_found
 
         return self.vulns_found
 

@@ -16,7 +16,7 @@ import sys
 import time
 from typing import Dict, List, Optional, Callable
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.http_client import HttpClient
 from modules.async_engine import AsyncEngine
@@ -90,6 +90,8 @@ class TurboScanner:
 
         # تقرير نهائي
         duration = time.time() - start_time
+        results["duration"] = duration
+        results["vulns_count"] = len(self.all_vulns)
         self._print_final_report(duration, results)
 
         return results

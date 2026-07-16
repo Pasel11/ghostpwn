@@ -20,7 +20,7 @@ import hashlib
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.arabic_display import SmartLogger, Colors, fix_display
 

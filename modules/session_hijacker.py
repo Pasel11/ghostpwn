@@ -12,7 +12,7 @@ import json
 import urllib.parse
 from typing import Dict, List, Optional
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.http_client import HttpClient
 from modules.arabic_display import SmartLogger, Colors, fix_display

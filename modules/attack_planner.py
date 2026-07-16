@@ -17,7 +17,7 @@ import json
 from typing import Dict, List, Optional, Set, Tuple
 from enum import Enum
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.arabic_display import SmartLogger, Colors, fix_display
 from modules.exploit_chain import ExploitChainEngine, VULN_CAPABILITIES, CHAIN_PATTERNS

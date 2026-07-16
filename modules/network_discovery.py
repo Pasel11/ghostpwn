@@ -13,7 +13,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional, Tuple
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class NetworkDiscovery:

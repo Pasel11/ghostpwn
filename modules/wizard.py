@@ -8,7 +8,7 @@ import sys
 import os
 from typing import Dict, Optional
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.profiles import PROFILES, profile_menu, get_profile, list_profiles
 from modules.config import Config

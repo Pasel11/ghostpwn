@@ -42,6 +42,12 @@ from modules.payload_generator import (
 )
 from modules.auto_pentest import AutoPentest
 from modules.session_cleanup import SessionCleanup
+from modules.wizard import Wizard
+from modules.profiles import PROFILES, get_profile, list_profiles
+from modules.config import Config
+from modules.updater import Updater
+from modules.help_system import HelpSystem
+from modules.progress import ProgressBar
 
 
 # ----------------------------- Banner -----------------------------
@@ -383,8 +389,16 @@ def main():
     )
     parser.add_argument("url", nargs="?", help="Target URL")
     parser.add_argument("--interactive", "-i", action="store_true", help="Interactive TUI menu")
+    parser.add_argument("--wizard", "-w", action="store_true", help="Interactive wizard (guided)")
     parser.add_argument("--auto", action="store_true",
                        help="Full automatic pentest (scan + exploit)")
+    parser.add_argument("--profile", choices=list(PROFILES.keys()),
+                       help="Use a scan profile (quick/standard/deep/stealth/etc)")
+    parser.add_argument("--update", action="store_true",
+                       help="Check for updates")
+    parser.add_argument("--config", action="store_true",
+                       help="Show current configuration")
+    parser.add_argument("--help-topic", help="Show help on specific topic")
     parser.add_argument("--stealth", choices=["low", "medium", "high"],
                        help="Stealth mode (low-noise scanning)")
     parser.add_argument("--cleanup", action="store_true",
@@ -430,6 +444,24 @@ def main():
 
     args = parser.parse_args()
 
+    # Update mode
+    if args.update:
+        updater = Updater()
+        updater.check_and_update(auto=False)
+        return
+
+    # Config mode
+    if args.config:
+        config = Config()
+        config.print_config()
+        return
+
+    # Help topic
+    if args.help_topic:
+        help_sys = HelpSystem()
+        help_sys.show_help(args.help_topic)
+        return
+
     # Cleanup mode
     if args.cleanup:
         cleanup = SessionCleanup(".")
@@ -470,9 +502,39 @@ def main():
         log_success(f"All shells saved: {output}")
         return
 
-    # Interactive mode
-    if args.interactive or (not args.url and not args.auto):
+    # Wizard mode (new default)
+    if args.wizard or (not args.url and not args.auto and not args.full
+                       and not args.interactive and not args.list_reverse
+                       and not args.list_web and not args.reverse
+                       and not args.webshell and not args.all_reverse):
+        wizard = Wizard()
+        wizard.main_menu()
+        return
+
+    # Interactive mode (old TUI)
+    if args.interactive:
         interactive_menu()
+        return
+
+    # Profile mode
+    if args.profile:
+        if not args.url:
+            log_error("--profile يتطلب URL")
+            return
+        url = args.url
+        if not url.startswith("http"):
+            url = "http://" + url
+
+        options = get_profile(args.profile)
+        options.update({
+            "output": args.output,
+            "user_agent": args.user_agent,
+        })
+
+        log_info(f"استخدام profile: {args.profile}")
+        auto = AutoPentest(url, options)
+        result = auto.run()
+        print(f"\n{Colors.GREEN}[✓] اكتمل الفحص{Colors.NC}")
         return
 
     # Auto mode (full automatic pentest)

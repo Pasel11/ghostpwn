@@ -145,6 +145,101 @@ def write_csv_report(vulns: List[Dict], output_path: str) -> str:
     return output_path
 
 
+def _generate_recommendations_html(vulns: List[Dict], risk: Dict) -> str:
+    """توليد HTML للتوصيات الأمنية"""
+    recommendations = []
+
+    # توصيات حسب نوع الثغرات المكتشفة
+    vuln_types_found = set(v.get("type", "") for v in vulns)
+
+    if any("sql_injection" in t for t in vuln_types_found):
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #dc3545;'>"
+            "<strong>🔴 SQL Injection:</strong> استخدم Prepared Statements في كل الاستعلامات. "
+            "لا تثق بمدخلات المستخدم. فعّل أقل صلاحيات لحساب قاعدة البيانات.</li>"
+        )
+
+    if any("xss" in t for t in vuln_types_found):
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #fd7e14;'>"
+            "<strong>🟠 XSS:</strong> استخدم Context-Aware Output Encoding. "
+            "فعّل Content-Security-Policy. استخدم HttpOnly cookies.</li>"
+        )
+
+    if any("lfi" in t for t in vuln_types_found):
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #dc3545;'>"
+            "<strong>🔴 LFI:</strong> لا تمرر مدخلات المستخدم لدوال include. "
+            "استخدم whitelist للملفات المسموح بها.</li>"
+        )
+
+    if any("command_injection" in t for t in vuln_types_found):
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #dc3545;'>"
+            "<strong>🔴 Command Injection:</strong> لا تستخدم system() مع مدخلات المستخدم. "
+            "استخدم مكتبات native. استخدم escapeshellarg().</li>"
+        )
+
+    if any("missing_security_header" in t for t in vuln_types_found):
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #0dcaf0;'>"
+            "<strong>🔵 Security Headers:</strong> أضف الـ security headers المفقودة: "
+            "HSTS, CSP, X-Frame-Options, X-Content-Type-Options.</li>"
+        )
+
+    if any("clickjacking" in t for t in vuln_types_found):
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #ffc107;'>"
+            "<strong>🟡 Clickjacking:</strong> أضف X-Frame-Options: DENY أو "
+            "CSP frame-ancestors directive.</li>"
+        )
+
+    if any("cors" in t for t in vuln_types_found):
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #fd7e14;'>"
+            "<strong>🟠 CORS:</strong> لا تستخدم Access-Control-Allow-Origin: * مع credentials. "
+            "حدد origins مسموح بها explicitly.</li>"
+        )
+
+    if any("insecure_cookie" in t for t in vuln_types_found):
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #0dcaf0;'>"
+            "<strong>🔵 Cookies:</strong> أضف Secure, HttpOnly, و SameSite flags "
+            "لجميع cookies الحساسة.</li>"
+        )
+
+    if any("info_disclosure" in t for t in vuln_types_found):
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #6c757d;'>"
+            "<strong>⚪ Information Disclosure:</strong> عطّل عرض معلومات السيرفر. "
+            "أزل headers غير الضرورية مثل X-Powered-By.</li>"
+        )
+
+    if any("sensitive_file" in t or "exposed" in t for t in vuln_types_found):
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #fd7e14;'>"
+            "<strong>🟠 Sensitive Files:</strong> احذف الملفات الحساسة من webroot "
+            "(.env, .git, config backups, SQL dumps).</li>"
+        )
+
+    if not recommendations:
+        recommendations.append(
+            "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #198754;'>"
+            "<strong>✅ لا توجد توصيات عاجلة:</strong> الموقع يبدو آمناً. "
+            "استمر في الفحص الدوري.</li>"
+        )
+
+    # توصية عامة
+    recommendations.append(
+        "<li style='margin-bottom:10px;padding:10px;background:#161b22;border-radius:6px;border-right:4px solid #58a6ff;'>"
+        "<strong>📋 توصية عامة:</strong> أجرِ فحوصات أمنية دورية. "
+        "حدّث جميع المكونات (plugins, themes, frameworks) بانتظام. "
+        "استخدم WAF للحماية الإضافية.</li>"
+    )
+
+    return "\n".join(recommendations)
+
+
 def write_html_report(scan_data: Dict, output_path: str) -> str:
     """كتابة تقرير HTML تفاعلي"""
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
@@ -315,8 +410,39 @@ def write_html_report(scan_data: Dict, output_path: str) -> str:
         {stats_html}
     </div>
 
+    <!-- Executive Summary -->
     <div class="card">
-        <h3>📋 الثغرات المكتشفة</h3>
+        <h3>📋 الملخص التنفيذي (Executive Summary)</h3>
+        <p style="margin-bottom: 15px; line-height: 1.8;">
+            تم إجراء فحص أمني شامل على الموقع <strong>{html.escape(meta.get('target', ''))}</strong>
+            بتاريخ <strong>{meta.get('timestamp', '')}</strong>.
+            استغرق الفحص <strong>{meta.get('duration_sec', 0)} ثانية</strong>.
+        </p>
+        <p style="margin-bottom: 15px; line-height: 1.8;">
+            تم اكتشاف <strong style="color:{risk['color']}">{len(vulns)} نتيجة أمنية</strong>:
+            {risk['counts']['critical']} حرج،
+            {risk['counts']['high']} عالي،
+            {risk['counts']['medium']} متوسط،
+            {risk['counts']['low']} منخفض،
+            {risk['counts']['info']} معلومة.
+        </p>
+        <p style="line-height: 1.8;">
+            مستوى الخطر الإجمالي: <strong style="color:{risk['color']}">{risk['level']}</strong>
+            (الدرجة: {risk['score']}/100).
+        </p>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="card">
+        <h3>✅ التوصيات الأمنية</h3>
+        <ul style="list-style: none; padding: 0;">
+            {_generate_recommendations_html(vulns, risk)}
+        </ul>
+    </div>
+
+    <!-- Findings Details -->
+    <div class="card">
+        <h3>🔍 تفاصيل الاكتشافات</h3>
         <div class="filter-bar">
             <span style="color:#8b949e;font-size:12px">تصفية:</span>
             <button class="filter-btn active" onclick="filterVulns('all')">الكل</button>

